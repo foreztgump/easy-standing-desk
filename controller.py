@@ -8,7 +8,7 @@ class Widget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(Widget, self).__init__(parent)
         self.resize(338,206)
-        self.setWindowTitle("Tee\'s Standing Desk Controller")
+        self.setWindowTitle("Forezt\'s Standing Desk Controller")
 
         self.label = QtWidgets.QLabel(self)
         self.label.setGeometry(QtCore.QRect(20, 110, 61, 16))
