@@ -1,14 +1,16 @@
 #include "Adafruit_VL53L0X.h"
-
+#include "BTS7960.h"
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
-const int greenPin =  3;  //UP
-const int whitePin =  4; //Down
 
+const uint8_t EN = 8;
+const uint8_t L_PWM = 10;
+const uint8_t R_PWM = 9;
+BTS7960 motorController(EN, L_PWM, R_PWM);
 
 void setup() {
   Serial.begin(115200);
-  for(int i=11; i < 22; i++) {
+  for(int i=2; i < 22; i++) {
     if(i ==  18 || i ==  19){
       //skip
     }
@@ -21,7 +23,7 @@ void setup() {
   while (! Serial) {
     delay(1);
   }
-  
+
   if (!lox.begin()) {
     Serial.println("SFailed to boot VL53L0X");
     while(1);
@@ -56,20 +58,10 @@ void loop() {
       //Serial.print("Height"); Serial.println(height);
       if (tableHeight < height) {
         Serial.println("Table is raising");
-        while (height > tableHeight) {
-         Serial.println("Up Loop");
-         tableHeight = readTableRange();
-         Serial.println(tableHeight);
-         tableUp();
-         float doneFlag = lookForBreak();
-         if (doneFlag == 555.00) {
-          Serial.println("SAbort");
-          tableStop();
-          break;
-         }
-        }
+        tableUp(height,tableHeight);
+        tableStopRight();
+        tableHeight = readTableRange();
         Serial.print("H");Serial.println(tableHeight);
-        tableStop();
       }
       break;
 
@@ -78,20 +70,10 @@ void loop() {
       //Serial.print("Height"); Serial.println(height);
       if (tableHeight > height) {
         Serial.println("Table is lowering");
-        while (height < tableHeight) {
-         Serial.println("Low Loop");
-         tableHeight = readTableRange();
-         Serial.println(tableHeight);
-         tableDown();
-         float doneFlag = lookForBreak();
-         if (doneFlag == 555.00) {
-          Serial.println("SAbort");
-          tableStop();
-          break;
-         }
-        }
+        tableDown(height,tableHeight);
+        tableStopLeft();
+        tableHeight = readTableRange();
         Serial.print("H");Serial.println(tableHeight);
-        tableStop();
       }
       break;
 
@@ -100,33 +82,18 @@ void loop() {
       tableHeight = readTableRange();
       if (tableHeight < height) {//@Height UP
         Serial.println("Table is raising");
-        while (height > tableHeight) {
-          tableHeight = readTableRange();
-          tableUp();
-          float doneFlag = lookForBreak();
-          if (doneFlag == 555.00) {
-            Serial.println("SAbort");
-            tableStop();
-            break;
-          }
-        }
+        tableUp(height,tableHeight);
+        tableStopRight();
+        tableHeight = readTableRange();
         Serial.print("H");Serial.println(tableHeight);
-        tableStop();
+        
       } else if (tableHeight > height) {//@Height Down
         Serial.println("Table is lowering");
+        tableDown(height,tableHeight);
+        tableStopLeft();
         tableHeight = readTableRange();
-        while (height < tableHeight) {
-          tableHeight = readTableRange();
-          tableUp();
-          float doneFlag = lookForBreak();
-          if (doneFlag == 555.00) {
-            Serial.println("SAbort");
-            tableStop();
-            break;
-          }
-        }
         Serial.print("H");Serial.println(tableHeight);
-        tableStop();
+        
       }
       break;
 
@@ -140,7 +107,7 @@ void loop() {
 float readTableRange() {
   VL53L0X_RangingMeasurementData_t measure;
   float Samples=0.0, AvgRange=0.0, rangeInch=0.0;
-  Serial.print("Reading a measurement... ");
+  //Serial.print("Reading a measurement... ");
   lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
   if (measure.RangeStatus != 4) {  // phase failures have incorrect data
     for (int x = 0; x < 25; x++){
@@ -156,19 +123,89 @@ float readTableRange() {
   }
 }
 
-void tableUp() {
-  digitalWrite(whitePin, LOW);
-  digitalWrite(greenPin, HIGH);
+void tableUp(float height, float tableHeight) {
+  motorController.Enable();
+  delay(100);
+  float diff = height - tableHeight;
+  int speedSet = 0;
+  if (diff >= 2.0) {
+    for(int speed = 0 ; speed < 255; speed+=40) {
+      motorController.TurnRight(speed);
+      speedSet = speed;
+      delay(75);
+    }
+  } else {
+    for(int speed = 0 ; speed < 180; speed+=40) {
+      motorController.TurnRight(speed);
+      speedSet = speed;
+      delay(75);
+    }
+  }
+  
+  while (tableHeight < height) {
+    //Serial.println("Up Loop");
+    tableHeight = readTableRange();
+    //Serial.println(tableHeight);
+    diff = height - tableHeight;
+    if (diff < 2.00 && speedSet > 180) {
+      motorController.TurnRight(180);
+    }
+    float doneFlag = lookForBreak();
+    if (doneFlag == 555.00) {
+      Serial.println("SAbort");
+      tableStopRight();
+      break;
+    }
+  }
 }
 
-void tableDown() {
-  digitalWrite(whitePin, HIGH);
-  digitalWrite(greenPin, LOW);
+void tableDown(float height, float tableHeight) {
+  motorController.Enable();
+  delay(100);
+  float diff = tableHeight - height;
+  int speedSet = 0;
+  if (diff >= 2.0) {
+    for(int speed = 0 ; speed < 255; speed+=40) {
+      motorController.TurnLeft(speed);
+      speedSet = speed;
+      delay(75);
+    }
+  } else {
+    for(int speed = 0 ; speed < 180; speed+=40) {
+      motorController.TurnLeft(speed);
+      speedSet = speed;
+      delay(75);
+    }
+  }
+  while (tableHeight > height) {
+    //Serial.println("Low Loop");
+    tableHeight = readTableRange();
+    //Serial.println(tableHeight);
+    diff = tableHeight - height;
+    if (diff < 2.00 && speedSet > 180) {
+      motorController.TurnLeft(180);   
+    }
+    float doneFlag = lookForBreak();
+    if (doneFlag == 555.00) {
+      Serial.println("SAbort");
+      tableStopLeft();
+      break;
+    }
+  }
 }
 
-void tableStop() {
-  digitalWrite(greenPin, LOW);
-  digitalWrite(whitePin, LOW);  
+void tableStopRight() {
+  motorController.TurnRight(0);
+  motorController.Stop();
+  delay(100);
+  motorController.Disable();
+}
+
+void tableStopLeft() {
+  motorController.TurnLeft(0);
+  motorController.Stop();
+  delay(100);
+  motorController.Disable();
 }
 
 float lookForBreak() {
