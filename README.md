@@ -1,6 +1,6 @@
 # easy-standing-desk
 
-![gui](gui.PNG)
+![gui](gui.png)
 
 This is a simple add-on modification to my generic standing desk to add save, load, automatic height adjust and manual height adjust function. All of that with a gui controller from a computer, communicating via serial to arduino.
 
